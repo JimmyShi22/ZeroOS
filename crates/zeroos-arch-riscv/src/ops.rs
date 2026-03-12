@@ -3,6 +3,7 @@
 use core::mem::size_of;
 
 use foundation::ops::ArchOps;
+use foundation::SyscallFrame;
 
 use crate::ret_from_fork::ret_from_fork;
 use crate::switch_to::switch_to;
@@ -91,16 +92,7 @@ unsafe fn trap_frame_get_nr(regs: *const u8) -> usize {
 /// `regs` must point to a valid `TrapFrame`.
 #[inline(always)]
 unsafe fn trap_frame_get_arg(regs: *const u8, idx: usize) -> usize {
-    let r = &*(regs as *const TrapFrame);
-    match idx {
-        0 => r.a0,
-        1 => r.a1,
-        2 => r.a2,
-        3 => r.a3,
-        4 => r.a4,
-        5 => r.a5,
-        _ => 0,
-    }
+    (*(regs as *const TrapFrame)).arg(idx)
 }
 
 /// # Safety
