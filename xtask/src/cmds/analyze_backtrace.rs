@@ -268,7 +268,7 @@ fn print_detailed_elf_analysis(lto: &str, top: usize) -> Result<()> {
 
     let output = cmd.output()?;
     if !output.status.success() {
-        println!("⚠ Failed to build binary for detailed analysis");
+        println!("\u{26a0} Failed to build binary for detailed analysis");
         return Ok(());
     }
 
@@ -284,7 +284,7 @@ fn print_detailed_elf_analysis(lto: &str, top: usize) -> Result<()> {
     let reports = match elf_report::analyze_paths(std::slice::from_ref(&bin_path), &[None], top) {
         Ok(r) => r,
         Err(e) => {
-            println!("⚠ elf-report analysis failed: {}", e);
+            println!("\u{26a0} elf-report analysis failed: {}", e);
             return Ok(());
         }
     };
@@ -331,7 +331,7 @@ fn print_detailed_elf_analysis(lto: &str, top: usize) -> Result<()> {
 
     let output = cmd.output()?;
     if !output.status.success() {
-        println!("⚠ Failed to build stripped binary");
+        println!("\u{26a0} Failed to build stripped binary");
         return Ok(());
     }
 
@@ -342,7 +342,7 @@ fn print_detailed_elf_analysis(lto: &str, top: usize) -> Result<()> {
     let stripped_reports = match elf_report::analyze_paths(&[stripped_bin_path], &[None], 0) {
         Ok(r) => r,
         Err(e) => {
-            println!("⚠ elf-report analysis failed: {}", e);
+            println!("\u{26a0} elf-report analysis failed: {}", e);
             return Ok(());
         }
     };
@@ -350,54 +350,7 @@ fn print_detailed_elf_analysis(lto: &str, top: usize) -> Result<()> {
     // Show just the sections table
     if let Some(report) = stripped_reports.first() {
         println!("### Largest sections\n");
-
-        let sections_to_show: Vec<_> = report.sections.iter().take(30).collect();
-        let max_section_name_len = sections_to_show
-            .iter()
-            .map(|s| s.name.len() + 2)
-            .max()
-            .unwrap_or(7)
-            .max(7);
-        let max_size_len = sections_to_show
-            .iter()
-            .map(|s| format!("{}", s.size).len())
-            .max()
-            .unwrap_or(12)
-            .max(12);
-        let addr_width = 10;
-
-        println!(
-            "| {:<width_section$} | {:>width_size$} | {:>width_addr$} |",
-            "section",
-            "size (bytes)",
-            "address",
-            width_section = max_section_name_len,
-            width_size = max_size_len,
-            width_addr = addr_width
-        );
-        println!(
-            "|{:-<width_section$}|{:-<width_size$}:|{:-<width_addr$}:|",
-            "",
-            "",
-            "",
-            width_section = max_section_name_len + 2,
-            width_size = max_size_len + 2,
-            width_addr = addr_width + 2
-        );
-
-        for sec in &sections_to_show {
-            let section_cell = format!("`{}`", sec.name);
-            println!(
-                "| {:<width_section$} | {:>width_size$} | {:>#width_addr$x} |",
-                section_cell,
-                sec.size,
-                sec.address,
-                width_section = max_section_name_len,
-                width_size = max_size_len,
-                width_addr = addr_width
-            );
-        }
-        println!();
+        print!("{}", elf_report::render_sections_table(&report.sections));
     }
 
     println!();
@@ -427,7 +380,7 @@ fn print_insights(results: &HashMap<BuildConfig, u64>, _modes: &[(&str, &str)]) 
     };
     if let Some(&min_size) = results.get(&min_config) {
         println!(
-            "✓ Absolute minimum (no-std + off + debug=0 + strip): {}",
+            "\u{2713} Absolute minimum (no-std + off + debug=0 + strip): {}",
             bytefmt::format(min_size)
         );
     }
@@ -448,7 +401,7 @@ fn print_insights(results: &HashMap<BuildConfig, u64>, _modes: &[(&str, &str)]) 
     if let (Some(&nostrip), Some(&strip)) = (nostd_off_d0_nostrip, nostd_off_d0_strip) {
         let saved = nostrip.saturating_sub(strip);
         println!(
-            "✓ Strip impact (debug=0): {} → {} (saves {})",
+            "\u{2713} Strip impact (debug=0): {} \u{2192} {} (saves {})",
             bytefmt::format(nostrip),
             bytefmt::format(strip),
             bytefmt::format(saved)
@@ -471,7 +424,7 @@ fn print_insights(results: &HashMap<BuildConfig, u64>, _modes: &[(&str, &str)]) 
     });
     if let (Some(&d0), Some(&d1)) = (nostd_off_strip_d0, nostd_off_strip_d1) {
         let cost = d1.saturating_sub(d0);
-        println!("✓ Debug=1 cost (line tables): +{}", bytefmt::format(cost));
+        println!("\u{2713} Debug=1 cost (line tables): +{}", bytefmt::format(cost));
     }
 
     // Backtrace overhead (no-std, minimal)
@@ -490,7 +443,7 @@ fn print_insights(results: &HashMap<BuildConfig, u64>, _modes: &[(&str, &str)]) 
     if let (Some(&off), Some(&fp)) = (nostd_off, nostd_fp) {
         let overhead = fp.saturating_sub(off);
         println!(
-            "✓ Frame-pointer overhead (no-std, production): +{}",
+            "\u{2713} Frame-pointer overhead (no-std, production): +{}",
             bytefmt::format(overhead)
         );
     }
@@ -511,7 +464,7 @@ fn print_insights(results: &HashMap<BuildConfig, u64>, _modes: &[(&str, &str)]) 
     if let (Some(&off), Some(&dwarf)) = (std_off, std_dwarf) {
         let overhead = (dwarf as i64 - off as i64).unsigned_abs();
         println!(
-            "✓ DWARF overhead (std, production): +{}",
+            "\u{2713} DWARF overhead (std, production): +{}",
             bytefmt::format(overhead)
         );
     }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::symbol::extract_path_at_depth;
-use crate::types::{FileReport, SymbolGroup, SymbolInfo};
+use crate::types::{FileReport, SectionInfo, SymbolGroup, SymbolInfo};
 
 fn format_size(bytes: u64) -> String {
     if bytes < 1024 {
@@ -11,6 +11,60 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{:.2} MiB", bytes as f64 / (1024.0 * 1024.0))
     }
+}
+
+/// Render a markdown table of sections (up to 30).
+/// Returns the table as a `String` including a trailing newline.
+pub fn render_sections_table(sections: &[SectionInfo]) -> String {
+    let mut s = String::new();
+    let sections_to_show: Vec<_> = sections.iter().take(30).collect();
+    let max_section_name_len = sections_to_show
+        .iter()
+        .map(|sec| sec.name.len() + 2) // +2 for backticks
+        .max()
+        .unwrap_or(7)
+        .max(7); // min width for "section"
+    let max_size_len = sections_to_show
+        .iter()
+        .map(|sec| format!("{}", sec.size).len())
+        .max()
+        .unwrap_or(12)
+        .max(12); // min width for "size (bytes)"
+    let addr_width = 10; // "address" width
+
+    s.push_str(&format!(
+        "| {:<width_section$} | {:>width_size$} | {:>width_addr$} |\n",
+        "section",
+        "size (bytes)",
+        "address",
+        width_section = max_section_name_len,
+        width_size = max_size_len,
+        width_addr = addr_width
+    ));
+    s.push_str(&format!(
+        "|{:-<width_section$}|{:-<width_size$}:|{:-<width_addr$}:|\n",
+        "",
+        "",
+        "",
+        width_section = max_section_name_len + 2,
+        width_size = max_size_len + 2,
+        width_addr = addr_width + 2
+    ));
+
+    for sec in &sections_to_show {
+        let section_cell = format!("`{}`", sec.name);
+        s.push_str(&format!(
+            "| {:<width_section$} | {:>width_size$} | {:>#width_addr$x} |\n",
+            section_cell,
+            sec.size,
+            sec.address,
+            width_section = max_section_name_len,
+            width_size = max_size_len,
+            width_addr = addr_width
+        ));
+    }
+    s.push('\n');
+    s
 }
 
 pub fn render_markdown(reports: &[FileReport]) -> String {
@@ -42,55 +96,7 @@ pub fn render_markdown(reports: &[FileReport]) -> String {
         }
 
         s.push_str("### Largest sections\n\n");
-
-        // Calculate column widths for sections
-        let sections_to_show: Vec<_> = r.sections.iter().take(30).collect();
-        let max_section_name_len = sections_to_show
-            .iter()
-            .map(|s| s.name.len() + 2) // +2 for backticks
-            .max()
-            .unwrap_or(7)
-            .max(7); // min width for "section"
-        let max_size_len = sections_to_show
-            .iter()
-            .map(|s| format!("{}", s.size).len())
-            .max()
-            .unwrap_or(12)
-            .max(12); // min width for "size (bytes)"
-        let addr_width = 10; // "address" width
-
-        s.push_str(&format!(
-            "| {:<width_section$} | {:>width_size$} | {:>width_addr$} |\n",
-            "section",
-            "size (bytes)",
-            "address",
-            width_section = max_section_name_len,
-            width_size = max_size_len,
-            width_addr = addr_width
-        ));
-        s.push_str(&format!(
-            "|{:-<width_section$}|{:-<width_size$}:|{:-<width_addr$}:|\n",
-            "",
-            "",
-            "",
-            width_section = max_section_name_len + 2,
-            width_size = max_size_len + 2,
-            width_addr = addr_width + 2
-        ));
-
-        for sec in &sections_to_show {
-            let section_cell = format!("`{}`", sec.name);
-            s.push_str(&format!(
-                "| {:<width_section$} | {:>width_size$} | {:>#width_addr$x} |\n",
-                section_cell,
-                sec.size,
-                sec.address,
-                width_section = max_section_name_len,
-                width_size = max_size_len,
-                width_addr = addr_width
-            ));
-        }
-        s.push('\n');
+        s.push_str(&render_sections_table(&r.sections));
 
         if !r.top_text_symbols.is_empty() {
             s.push_str("### Top .text symbols\n\n");
@@ -179,55 +185,7 @@ pub fn render_markdown_grouped(reports: &[FileReport], depth: usize) -> String {
         }
 
         s.push_str("### Largest sections\n\n");
-
-        // Calculate column widths for sections
-        let sections_to_show: Vec<_> = r.sections.iter().take(30).collect();
-        let max_section_name_len = sections_to_show
-            .iter()
-            .map(|s| s.name.len() + 2) // +2 for backticks
-            .max()
-            .unwrap_or(7)
-            .max(7); // min width for "section"
-        let max_size_len = sections_to_show
-            .iter()
-            .map(|s| format!("{}", s.size).len())
-            .max()
-            .unwrap_or(12)
-            .max(12); // min width for "size (bytes)"
-        let addr_width = 10; // "address" width
-
-        s.push_str(&format!(
-            "| {:<width_section$} | {:>width_size$} | {:>width_addr$} |\n",
-            "section",
-            "size (bytes)",
-            "address",
-            width_section = max_section_name_len,
-            width_size = max_size_len,
-            width_addr = addr_width
-        ));
-        s.push_str(&format!(
-            "|{:-<width_section$}|{:-<width_size$}:|{:-<width_addr$}:|\n",
-            "",
-            "",
-            "",
-            width_section = max_section_name_len + 2,
-            width_size = max_size_len + 2,
-            width_addr = addr_width + 2
-        ));
-
-        for sec in &sections_to_show {
-            let section_cell = format!("`{}`", sec.name);
-            s.push_str(&format!(
-                "| {:<width_section$} | {:>width_size$} | {:>#width_addr$x} |\n",
-                section_cell,
-                sec.size,
-                sec.address,
-                width_section = max_section_name_len,
-                width_size = max_size_len,
-                width_addr = addr_width
-            ));
-        }
-        s.push('\n');
+        s.push_str(&render_sections_table(&r.sections));
 
         if !r.top_text_symbols.is_empty() {
             s.push_str(&format!("### Top .text groups (depth {})\n\n", depth));
