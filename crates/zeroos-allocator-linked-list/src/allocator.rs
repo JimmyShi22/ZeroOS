@@ -48,13 +48,20 @@ pub(crate) fn realloc(ptr: *mut u8, old_layout: Layout, new_size: usize) -> *mut
         Err(_) => return ptr::null_mut(),
     };
 
-    let new_ptr = alloc(new_layout);
-    if !new_ptr.is_null() {
-        let copy_size = old_layout.size().min(new_size);
-        unsafe {
-            ptr::copy_nonoverlapping(ptr, new_ptr, copy_size);
+    // Acquire the heap lock once to avoid the race window between
+    // allocate_first_fit and deallocate that existed when calling
+    // alloc() and dealloc() separately.
+    let mut heap = HEAP.lock();
+    let new_ptr = match heap.allocate_first_fit(new_layout) {
+        Ok(nn) => nn.as_ptr(),
+        Err(_) => return ptr::null_mut(),
+    };
+    let copy_size = old_layout.size().min(new_size);
+    unsafe {
+        ptr::copy_nonoverlapping(ptr, new_ptr, copy_size);
+        if let Some(old_nn) = ptr::NonNull::new(ptr) {
+            heap.deallocate(old_nn, old_layout);
         }
-        dealloc(ptr, old_layout);
     }
     new_ptr
 }
