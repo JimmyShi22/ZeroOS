@@ -15,4 +15,3 @@ path = "src/lib.rs"
 clap.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
-tempfile.workspace = true
