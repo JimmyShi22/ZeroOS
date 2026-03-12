@@ -33,7 +33,8 @@ pub fn build_command(args: SpikeBuildArgs) -> Result<()> {
     let workspace_root = build::cmds::find_workspace_root()?;
     debug!("workspace_root: {}", workspace_root.display());
 
-    let linker_tpl_path = find_spike_platform_linker_template(&workspace_root)?;
+    let metadata = load_cargo_metadata(&workspace_root)?;
+    let linker_tpl_path = find_spike_platform_linker_template(&metadata)?;
     let linker_tpl = std::fs::read_to_string(&linker_tpl_path).with_context(|| {
         format!(
             "Failed to read spike-platform linker template: {}",
@@ -68,7 +69,7 @@ pub fn build_command(args: SpikeBuildArgs) -> Result<()> {
     )?;
 
     if let Some(out_tpl) = &args.emit_linker_script {
-        emit_linker_script(&workspace_root, &args.base, out_tpl, args.force)?;
+        emit_linker_script(&workspace_root, &metadata, &args.base, out_tpl, args.force)?;
     }
 
     Ok(())
@@ -76,6 +77,7 @@ pub fn build_command(args: SpikeBuildArgs) -> Result<()> {
 
 fn emit_linker_script(
     workspace_root: &Path,
+    metadata: &serde_json::Value,
     base: &BuildArgs,
     out_tpl: &str,
     force: bool,
@@ -104,7 +106,7 @@ fn emit_linker_script(
     let out_path_str = expand_emit_path(
         out_tpl,
         workspace_root,
-        &resolve_package_dir(workspace_root, &base.package)?,
+        &resolve_package_dir(metadata, &base.package)?,
         target,
         &profile,
         &base.package,
@@ -149,7 +151,7 @@ fn expand_emit_path(
         .replace("<PROFILE>", profile)
 }
 
-fn resolve_package_dir(workspace_root: &Path, package_name: &str) -> Result<PathBuf> {
+fn load_cargo_metadata(workspace_root: &Path) -> Result<serde_json::Value> {
     let output = Command::new("cargo")
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .arg("--manifest-path")
@@ -165,10 +167,11 @@ fn resolve_package_dir(workspace_root: &Path, package_name: &str) -> Result<Path
         );
     }
 
-    let v: serde_json::Value =
-        serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata JSON")?;
+    serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata JSON")
+}
 
-    let packages = v
+fn resolve_package_dir(metadata: &serde_json::Value, package_name: &str) -> Result<PathBuf> {
+    let packages = metadata
         .get("packages")
         .and_then(|p| p.as_array())
         .ok_or_else(|| anyhow::anyhow!("cargo metadata JSON: missing `packages` array"))?;
@@ -220,26 +223,8 @@ fn find_file_named(
     Ok(None)
 }
 
-fn find_spike_platform_linker_template(workspace_root: &std::path::Path) -> Result<PathBuf> {
-    let output = Command::new("cargo")
-        .args(["metadata", "--format-version", "1", "--no-deps"])
-        .arg("--manifest-path")
-        .arg(workspace_root.join("Cargo.toml"))
-        .output()
-        .context("Failed to run `cargo metadata`")?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "`cargo metadata` failed:\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let v: serde_json::Value =
-        serde_json::from_slice(&output.stdout).context("Failed to parse cargo metadata JSON")?;
-
-    let packages = v
+fn find_spike_platform_linker_template(metadata: &serde_json::Value) -> Result<PathBuf> {
+    let packages = metadata
         .get("packages")
         .and_then(|p| p.as_array())
         .ok_or_else(|| anyhow::anyhow!("cargo metadata JSON: missing `packages` array"))?;
