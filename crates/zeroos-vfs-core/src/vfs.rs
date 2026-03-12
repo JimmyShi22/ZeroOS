@@ -52,26 +52,12 @@ impl Vfs {
             .and_then(|(_, f)| *f)
             .ok_or(-(libc::ENOENT as isize))?;
 
-        let mut found: Option<Fd> = None;
         let start = self.next_fd.max(3) as usize;
-        for idx in start..MAX_FDS {
-            if self.fd_table[idx].is_none() {
-                found = Some(idx as Fd);
-                break;
-            }
-        }
-        if found.is_none() {
-            for idx in 3..start.min(MAX_FDS) {
-                if self.fd_table[idx].is_none() {
-                    found = Some(idx as Fd);
-                    break;
-                }
-            }
-        }
-        let fd = match found {
-            Some(fd) => fd,
-            None => return Err(-(libc::EMFILE as isize)),
-        };
+        let fd = (start..MAX_FDS)
+            .chain(3..start)
+            .find(|&i| self.fd_table[i].is_none())
+            .map(|i| i as Fd)
+            .ok_or(-(libc::EMFILE as isize))?;
         self.next_fd = if (fd as usize) + 1 < MAX_FDS {
             fd + 1
         } else {
