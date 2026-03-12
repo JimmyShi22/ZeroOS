@@ -46,7 +46,7 @@ pub fn generate_target_command(cli_args: SpikeGenerateTargetArgs) -> Result<()> 
     };
 
     let json_content =
-        generate_target_spec(&cli_args.base, build::spec::TargetRenderOptions::default())
+        generate_target_spec(cli_args.base, build::spec::TargetRenderOptions::default())
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     let output_path = cli_args

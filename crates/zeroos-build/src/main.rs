@@ -358,7 +358,7 @@ fn generate_target_command(cli_args: ZeroosGenerateTargetArgs) -> Result<()> {
     };
 
     let json_content = generate_target_spec(
-        &cli_args.base,
+        cli_args.base,
         TargetRenderOptions {
             emit_unwind_tables: cli_args.backtrace,
         },

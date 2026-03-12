@@ -319,7 +319,7 @@ fn write_target_spec(
     let path = target_spec_path.as_ref();
     debug!("Writing target spec to: {}", path.display());
     let target_spec_json = crate::cmds::generate_target_spec(
-        &GenerateTargetArgs {
+        GenerateTargetArgs {
             profile: Some(target.to_string()),
             ..Default::default()
         },
