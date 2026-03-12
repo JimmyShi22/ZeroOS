@@ -48,12 +48,9 @@ pub fn sys_mmap(
         Ok(l) => l,
         Err(_) => return -(libc::EINVAL as isize),
     };
-    let ptr = kfn::memory::kmalloc(layout);
+    let ptr = kfn::memory::kzalloc(layout);
     if ptr.is_null() {
         return -(libc::ENOMEM as isize);
-    }
-    unsafe {
-        core::ptr::write_bytes(ptr, 0, size);
     }
     ptr as isize
 }
