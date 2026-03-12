@@ -13,12 +13,15 @@ fn parse_hex_u64(s: &str) -> Option<u64> {
     u64::from_str_radix(s, 16).ok()
 }
 
-fn looks_like_object_path(s: &str) -> bool {
-    let s = s.trim();
-    if s.is_empty() {
+fn looks_like_object_path(tokens: &[&str]) -> bool {
+    let first = match tokens.first() {
+        Some(t) => t.trim(),
+        None => return false,
+    };
+    if first.is_empty() {
         return false;
     }
-    if s.starts_with("*(") || s.starts_with('*') || s.starts_with('(') {
+    if first.starts_with("*(") || first.starts_with('*') || first.starts_with('(') {
         return false;
     }
 
@@ -27,7 +30,9 @@ fn looks_like_object_path(s: &str) -> bool {
     // - relative/foo.o
     // - libfoo.a(bar.o)
     // - /lib/libc.so.6
-    s.contains(".o") || s.contains(".a(") || s.contains(".so")
+    tokens
+        .iter()
+        .any(|t| t.contains(".o") || t.contains(".a(") || t.contains(".so"))
 }
 
 fn is_plain_section_label(name: &str) -> bool {
@@ -152,8 +157,7 @@ fn parse_map_symbols_text(text: &str) -> Vec<MapSymbol> {
         //   .rodata 0xADDR 0xSIZE  libfoo.a(bar.o)
         if tokens.len() >= 4 && is_plain_section_label(tokens[0]) {
             if let (Some(addr), Some(sz)) = (parse_hex_u64(tokens[1]), parse_hex_u64(tokens[2])) {
-                let rest = tokens[3..].join(" ");
-                if sz > 0 && looks_like_object_path(&rest) {
+                if sz > 0 && looks_like_object_path(&tokens[3..]) {
                     if let Some(b) = cur_block.take() {
                         finish_block(b, &mut out);
                     }
@@ -220,7 +224,7 @@ fn parse_map_symbols_text(text: &str) -> Vec<MapSymbol> {
                     if name == "*fill*" || name.starts_with('*') || name == "PROVIDE" {
                         continue;
                     }
-                    if looks_like_object_path(name) {
+                    if looks_like_object_path(&[name]) {
                         continue;
                     }
                     if name.starts_with('.') {
@@ -279,7 +283,7 @@ fn parse_map_symbols_text(text: &str) -> Vec<MapSymbol> {
             if name == "*fill*" || name.starts_with('*') || name == "PROVIDE" {
                 continue;
             }
-            if looks_like_object_path(name) {
+            if looks_like_object_path(&[name]) {
                 continue;
             }
             if is_plain_section_label(name) {
