@@ -38,20 +38,13 @@ struct IoVec {
     iov_len: usize,
 }
 
-pub fn sys_readv(fd: usize, iov: usize, iovcnt: usize) -> isize {
-    if iovcnt == 0 {
-        return -(libc::EINVAL as isize);
-    }
-    if iov == 0 {
-        return -(libc::EFAULT as isize);
-    }
-    if iovcnt > (libc::UIO_MAXIOV as usize) {
-        return -(libc::EINVAL as isize);
-    }
-    if !iov.is_multiple_of(core::mem::align_of::<IoVec>()) {
-        return -(libc::EINVAL as isize);
-    }
-    let iovecs = unsafe { core::slice::from_raw_parts(iov as *const IoVec, iovcnt) };
+fn do_vectored_io(
+    fd: i32,
+    iov: *const IoVec,
+    iovcnt: usize,
+    op: unsafe fn(i32, *mut u8, usize) -> isize,
+) -> isize {
+    let iovecs = unsafe { core::slice::from_raw_parts(iov, iovcnt) };
     let mut total = 0isize;
     for v in iovecs {
         if v.iov_len == 0 {
@@ -64,7 +57,7 @@ pub fn sys_readv(fd: usize, iov: usize, iovcnt: usize) -> isize {
                 -(libc::EFAULT as isize)
             };
         }
-        let r = kfn::vfs::kread(fd as i32, v.iov_base, v.iov_len);
+        let r = unsafe { op(fd, v.iov_base, v.iov_len) };
         if r < 0 {
             return if total > 0 { total } else { r };
         }
@@ -76,42 +69,37 @@ pub fn sys_readv(fd: usize, iov: usize, iovcnt: usize) -> isize {
     total
 }
 
-pub fn sys_writev(fd: usize, iov: usize, iovcnt: usize) -> isize {
+fn validate_iov(iov: usize, iovcnt: usize) -> Result<(), isize> {
     if iovcnt == 0 {
-        return -(libc::EINVAL as isize);
+        return Err(-(libc::EINVAL as isize));
     }
     if iov == 0 {
-        return -(libc::EFAULT as isize);
+        return Err(-(libc::EFAULT as isize));
     }
     if iovcnt > (libc::UIO_MAXIOV as usize) {
-        return -(libc::EINVAL as isize);
+        return Err(-(libc::EINVAL as isize));
     }
     if !iov.is_multiple_of(core::mem::align_of::<IoVec>()) {
-        return -(libc::EINVAL as isize);
+        return Err(-(libc::EINVAL as isize));
     }
-    let iovecs = unsafe { core::slice::from_raw_parts(iov as *const IoVec, iovcnt) };
-    let mut total = 0isize;
-    for v in iovecs {
-        if v.iov_len == 0 {
-            continue;
-        }
-        if v.iov_base.is_null() {
-            return if total > 0 {
-                total
-            } else {
-                -(libc::EFAULT as isize)
-            };
-        }
-        let r = kfn::vfs::kwrite(fd as i32, v.iov_base as *const u8, v.iov_len);
-        if r < 0 {
-            return if total > 0 { total } else { r };
-        }
-        total += r;
-        if (r as usize) < v.iov_len {
-            break;
-        }
+    Ok(())
+}
+
+pub fn sys_readv(fd: usize, iov: usize, iovcnt: usize) -> isize {
+    if let Err(e) = validate_iov(iov, iovcnt) {
+        return e;
     }
-    total
+    do_vectored_io(fd as i32, iov as *const IoVec, iovcnt, kfn::vfs::kread)
+}
+
+pub fn sys_writev(fd: usize, iov: usize, iovcnt: usize) -> isize {
+    if let Err(e) = validate_iov(iov, iovcnt) {
+        return e;
+    }
+    unsafe fn kwrite_mut(fd: i32, buf: *mut u8, len: usize) -> isize {
+        kfn::vfs::kwrite(fd, buf as *const u8, len)
+    }
+    do_vectored_io(fd as i32, iov as *const IoVec, iovcnt, kwrite_mut)
 }
 
 pub fn sys_lseek(fd: usize, offset: usize, whence: usize) -> isize {
