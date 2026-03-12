@@ -6,6 +6,8 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 extern crate alloc;
 
 pub(crate) struct BumpAllocator {
+    start: AtomicUsize,
+
     next: AtomicUsize,
 
     end: AtomicUsize,
@@ -14,12 +16,14 @@ pub(crate) struct BumpAllocator {
 impl BumpAllocator {
     pub(crate) const fn new() -> Self {
         Self {
+            start: AtomicUsize::new(0),
             next: AtomicUsize::new(0),
             end: AtomicUsize::new(0),
         }
     }
 
     pub(crate) fn init(&self, heap_start: usize, heap_size: usize) {
+        self.start.store(heap_start, Ordering::Release);
         self.next.store(heap_start, Ordering::SeqCst);
         let end = heap_start.checked_add(heap_size).unwrap_or(heap_start);
         self.end.store(end, Ordering::SeqCst);
@@ -51,10 +55,8 @@ impl BumpAllocator {
 
     #[allow(dead_code)]
     pub unsafe fn reset(&self) {
-        let end = self.end.load(Ordering::Acquire);
-        let capacity = self.get_capacity();
-        let start = end.saturating_sub(capacity);
-        self.next.store(start, Ordering::Release);
+        self.next
+            .store(self.start.load(Ordering::Acquire), Ordering::Release);
     }
 
     #[allow(dead_code)]
