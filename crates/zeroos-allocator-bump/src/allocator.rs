@@ -70,9 +70,9 @@ impl BumpAllocator {
 /// - `align`: Alignment (must be power of 2)
 #[inline]
 fn align_up(value: usize, align: usize) -> Option<usize> {
-    if align == 0 {
-        return None;
-    }
+    debug_assert!(align != 0, "align must be non-zero");
+    debug_assert!(align.is_power_of_two(), "align must be a power of two");
+    
     value.checked_add(align - 1).map(|v| v & !(align - 1))
 }
 
