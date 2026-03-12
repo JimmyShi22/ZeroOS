@@ -50,41 +50,36 @@ pub fn resolve_toolchain_paths(
     gcc_lib_arg: Option<PathBuf>,
     config: &ToolchainConfig,
 ) -> std::result::Result<ToolchainPaths, std::string::String> {
-    if let (Some(musl_lib), Some(gcc_lib)) = (musl_lib_arg.clone(), gcc_lib_arg.clone()) {
-        validate_musl_lib(&musl_lib)?;
-        validate_gcc_lib(&gcc_lib)?;
-
-        return Ok(ToolchainPaths { musl_lib, gcc_lib });
-    }
-
-    if let Some(musl_lib) = musl_lib_arg {
-        validate_musl_lib(&musl_lib)?;
-
-        let base = musl_lib
-            .parent()
-            .ok_or_else(|| "Invalid musl lib path: no parent directory".to_string())?;
-        let gcc_base = base
-            .join("lib/gcc")
-            .join(format!("{}-linux-musl", config.arch));
-
-        if gcc_base.exists() {
-            if let Ok(gcc_lib) = find_gcc_version_dir(&gcc_base) {
-                return Ok(ToolchainPaths { musl_lib, gcc_lib });
-            }
-        }
-
-        if let Some(gcc_lib) = gcc_lib_arg {
+    match (musl_lib_arg, gcc_lib_arg) {
+        (Some(musl_lib), Some(gcc_lib)) => {
+            validate_musl_lib(&musl_lib)?;
             validate_gcc_lib(&gcc_lib)?;
-            return Ok(ToolchainPaths { musl_lib, gcc_lib });
+
+            Ok(ToolchainPaths { musl_lib, gcc_lib })
         }
+        (Some(musl_lib), None) => {
+            validate_musl_lib(&musl_lib)?;
 
-        return Err("Could not find GCC library relative to musl lib.\n\
-             Please specify gcc_lib_path or install toolchain completely."
-            .to_string());
+            let base = musl_lib
+                .parent()
+                .ok_or_else(|| "Invalid musl lib path: no parent directory".to_string())?;
+            let gcc_base = base
+                .join("lib/gcc")
+                .join(format!("{}-linux-musl", config.arch));
+
+            if gcc_base.exists() {
+                if let Ok(gcc_lib) = find_gcc_version_dir(&gcc_base) {
+                    return Ok(ToolchainPaths { musl_lib, gcc_lib });
+                }
+            }
+
+            Err("Could not find GCC library relative to musl lib.\n\
+                 Please specify gcc_lib_path or install toolchain completely."
+                .to_string())
+        }
+        _ => discover_toolchain(&config.arch)
+            .ok_or_else(|| format!("Toolchain not found for architecture: {}", config.arch)),
     }
-
-    discover_toolchain(&config.arch)
-        .ok_or_else(|| format!("Toolchain not found for architecture: {}", config.arch))
 }
 
 fn validate_musl_lib(musl_lib: &Path) -> std::result::Result<(), std::string::String> {
