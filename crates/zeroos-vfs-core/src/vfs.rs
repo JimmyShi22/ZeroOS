@@ -16,6 +16,15 @@ impl Default for Vfs {
 }
 
 impl Vfs {
+    #[inline]
+    fn check_fd(fd: Fd) -> Option<usize> {
+        if fd >= 0 && (fd as usize) < MAX_FDS {
+            Some(fd as usize)
+        } else {
+            None
+        }
+    }
+
     /// Create a new VFS instance
     pub const fn new() -> Self {
         const NONE: (Option<&'static str>, Option<DeviceFactory>) = (None, None);
@@ -27,10 +36,8 @@ impl Vfs {
     }
 
     pub fn register_fd(&mut self, fd: Fd, entry: FdEntry) -> VfsResult<()> {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return Err(-(libc::EINVAL as isize));
-        }
-        self.fd_table[fd as usize] = Some(entry);
+        let idx = Self::check_fd(fd).ok_or(-(libc::EINVAL as isize))?;
+        self.fd_table[idx] = Some(entry);
         Ok(())
     }
 
@@ -85,70 +92,76 @@ impl Vfs {
     }
 
     pub fn read(&self, fd: Fd, buf: *mut u8, count: usize) -> isize {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return -(libc::EBADF as isize);
-        }
+        let idx = match Self::check_fd(fd) {
+            Some(i) => i,
+            None => return -(libc::EBADF as isize),
+        };
         if count != 0 && buf.is_null() {
             return -(libc::EFAULT as isize);
         }
 
-        match self.fd_table[fd as usize] {
+        match self.fd_table[idx] {
             Some(entry) => (entry.ops.read)(entry.private_data, buf, count),
             None => -(libc::EBADF as isize),
         }
     }
 
     pub fn write(&self, fd: Fd, buf: *const u8, count: usize) -> isize {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return -(libc::EBADF as isize);
-        }
+        let idx = match Self::check_fd(fd) {
+            Some(i) => i,
+            None => return -(libc::EBADF as isize),
+        };
         if count != 0 && buf.is_null() {
             return -(libc::EFAULT as isize);
         }
 
-        match self.fd_table[fd as usize] {
+        match self.fd_table[idx] {
             Some(entry) => (entry.ops.write)(entry.private_data, buf, count),
             None => -(libc::EBADF as isize),
         }
     }
 
     pub fn lseek(&self, fd: Fd, offset: isize, whence: i32) -> isize {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return -(libc::EBADF as isize);
-        }
+        let idx = match Self::check_fd(fd) {
+            Some(i) => i,
+            None => return -(libc::EBADF as isize),
+        };
 
-        match self.fd_table[fd as usize] {
+        match self.fd_table[idx] {
             Some(entry) => (entry.ops.llseek)(entry.private_data, offset, whence),
             None => -(libc::EBADF as isize),
         }
     }
 
     pub fn ioctl(&self, fd: Fd, request: usize, arg: usize) -> isize {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return -(libc::EBADF as isize);
-        }
+        let idx = match Self::check_fd(fd) {
+            Some(i) => i,
+            None => return -(libc::EBADF as isize),
+        };
 
-        match self.fd_table[fd as usize] {
+        match self.fd_table[idx] {
             Some(entry) => (entry.ops.ioctl)(entry.private_data, request, arg),
             None => -(libc::EBADF as isize),
         }
     }
 
     pub fn close(&mut self, fd: Fd) -> isize {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return -(libc::EBADF as isize);
-        }
+        let idx = match Self::check_fd(fd) {
+            Some(i) => i,
+            None => return -(libc::EBADF as isize),
+        };
 
-        match self.fd_table[fd as usize].take() {
+        match self.fd_table[idx].take() {
             Some(entry) => (entry.ops.release)(entry.private_data),
             None => -(libc::EBADF as isize),
         }
     }
 
     pub fn fstat(&self, fd: Fd, statbuf: *mut libc::stat) -> isize {
-        if fd < 0 || fd as usize >= MAX_FDS {
-            return -(libc::EBADF as isize);
-        }
+        let _idx = match Self::check_fd(fd) {
+            Some(i) => i,
+            None => return -(libc::EBADF as isize),
+        };
 
         if statbuf.is_null() {
             return -(libc::EFAULT as isize);
