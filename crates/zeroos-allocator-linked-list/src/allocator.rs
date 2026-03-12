@@ -21,10 +21,9 @@ pub(crate) fn alloc(layout: Layout) -> *mut u8 {
 }
 
 pub(crate) fn dealloc(ptr: *mut u8, layout: Layout) {
-    if !ptr.is_null() {
+    if let Some(nn) = ptr::NonNull::new(ptr) {
         unsafe {
-            HEAP.lock()
-                .deallocate(ptr::NonNull::new_unchecked(ptr), layout);
+            HEAP.lock().deallocate(nn, layout);
         }
     }
 }
