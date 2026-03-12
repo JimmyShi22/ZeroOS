@@ -16,9 +16,19 @@ struct WorkspaceManifest {
     root: PathBuf,
     root_manifest_path: PathBuf,
     root_manifest: Manifest,
-    workspace_deps: BTreeMap<String, Dependency>,
     members: Vec<MemberManifest>,
     release_plz: Option<ReleasePlzConfig>,
+}
+
+impl WorkspaceManifest {
+    fn workspace_deps(&self) -> &BTreeMap<String, Dependency> {
+        static EMPTY: BTreeMap<String, Dependency> = BTreeMap::new();
+        self.root_manifest
+            .workspace
+            .as_ref()
+            .map(|w| &w.dependencies)
+            .unwrap_or(&EMPTY)
+    }
 }
 
 struct MemberManifest {
@@ -54,13 +64,7 @@ fn load_workspace(root: PathBuf) -> Result<WorkspaceManifest> {
     let workspace_members = root_manifest
         .workspace
         .as_ref()
-        .map(|w| w.members.clone())
-        .unwrap_or_default();
-
-    let workspace_deps = root_manifest
-        .workspace
-        .as_ref()
-        .map(|w| w.dependencies.clone())
+        .map(|w| w.members.as_slice())
         .unwrap_or_default();
 
     let mut members: Vec<MemberManifest> = Vec::new();
@@ -80,7 +84,6 @@ fn load_workspace(root: PathBuf) -> Result<WorkspaceManifest> {
         root,
         root_manifest_path,
         root_manifest,
-        workspace_deps,
         members,
         release_plz,
     })
@@ -131,7 +134,7 @@ fn load_release_plz(root: &Path) -> Result<Option<ReleasePlzConfig>> {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            // Duplicate detection is a “rule”, but we can conveniently record it here by storing
+            // Duplicate detection is a "rule", but we can conveniently record it here by storing
             // only one and letting the rule compare.
             by_name_version_group.insert(name.to_string(), vg);
         }
@@ -200,7 +203,7 @@ fn rule_workspace_deps_are_inherited(ws: &WorkspaceManifest) -> Vec<String> {
         check_dep_section_requires_inheritance(
             pkg.name.as_str(),
             &m.manifest_path,
-            &ws.workspace_deps,
+            ws.workspace_deps(),
             &m.manifest.dependencies,
             "dependencies",
             &mut errors,
@@ -208,7 +211,7 @@ fn rule_workspace_deps_are_inherited(ws: &WorkspaceManifest) -> Vec<String> {
         check_dep_section_requires_inheritance(
             pkg.name.as_str(),
             &m.manifest_path,
-            &ws.workspace_deps,
+            ws.workspace_deps(),
             &m.manifest.dev_dependencies,
             "dev-dependencies",
             &mut errors,
@@ -216,7 +219,7 @@ fn rule_workspace_deps_are_inherited(ws: &WorkspaceManifest) -> Vec<String> {
         check_dep_section_requires_inheritance(
             pkg.name.as_str(),
             &m.manifest_path,
-            &ws.workspace_deps,
+            ws.workspace_deps(),
             &m.manifest.build_dependencies,
             "build-dependencies",
             &mut errors,
@@ -244,7 +247,7 @@ fn rule_no_local_crates_io_versions(ws: &WorkspaceManifest) -> Vec<String> {
         check_dep_section_no_local_crates_io_versions(
             pkg.name.as_str(),
             &m.manifest_path,
-            &ws.workspace_deps,
+            ws.workspace_deps(),
             &m.manifest.dependencies,
             "dependencies",
             ALLOWED_NON_WORKSPACE_DEPS,
@@ -253,7 +256,7 @@ fn rule_no_local_crates_io_versions(ws: &WorkspaceManifest) -> Vec<String> {
         check_dep_section_no_local_crates_io_versions(
             pkg.name.as_str(),
             &m.manifest_path,
-            &ws.workspace_deps,
+            ws.workspace_deps(),
             &m.manifest.dev_dependencies,
             "dev-dependencies",
             ALLOWED_NON_WORKSPACE_DEPS,
@@ -262,7 +265,7 @@ fn rule_no_local_crates_io_versions(ws: &WorkspaceManifest) -> Vec<String> {
         check_dep_section_no_local_crates_io_versions(
             pkg.name.as_str(),
             &m.manifest_path,
-            &ws.workspace_deps,
+            ws.workspace_deps(),
             &m.manifest.build_dependencies,
             "build-dependencies",
             ALLOWED_NON_WORKSPACE_DEPS,
