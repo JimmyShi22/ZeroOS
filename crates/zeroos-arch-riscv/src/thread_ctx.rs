@@ -57,12 +57,12 @@ impl ThreadContext {
 }
 
 #[inline]
-pub fn thread_ctx_size() -> usize {
+pub const fn thread_ctx_size() -> usize {
     size_of::<ThreadContext>()
 }
 
 #[inline]
-pub fn thread_ctx_align() -> usize {
+pub const fn thread_ctx_align() -> usize {
     align_of::<ThreadContext>()
 }
 
