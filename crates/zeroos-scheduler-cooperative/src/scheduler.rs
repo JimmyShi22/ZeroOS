@@ -323,21 +323,13 @@ impl Scheduler {
     }
 
     fn find_next_ready(&self, start_from: usize) -> Option<usize> {
-        for i in start_from..self.thread_count {
-            if let Some(tcb) = self.threads[i] {
-                if unsafe { (*tcb.as_ptr()).state == ThreadState::Ready } {
-                    return Some(i);
-                }
-            }
-        }
-        for i in 0..start_from {
-            if let Some(tcb) = self.threads[i] {
-                if unsafe { (*tcb.as_ptr()).state == ThreadState::Ready } {
-                    return Some(i);
-                }
-            }
-        }
-        None
+        (start_from..self.thread_count)
+            .chain(0..start_from)
+            .find(|&i| {
+                self.threads[i]
+                    .map(|tcb| unsafe { (*tcb.as_ptr()).state == ThreadState::Ready })
+                    .unwrap_or(false)
+            })
     }
 
     pub fn wake_futex(&mut self, futex_addr: usize, max_count: usize) -> usize {
